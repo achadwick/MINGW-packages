@@ -4,7 +4,7 @@ _realname=meson
 pkgbase=mingw-w64-${_realname}
 pkgname="${MINGW_PACKAGE_PREFIX}-${_realname}"
 pkgver=0.37.1
-pkgrel=1
+pkgrel=2
 pkgdesc="High-productivity build system (mingw-w64)"
 arch=('any')
 url="http://mesonbuild.com/"
@@ -32,15 +32,24 @@ package() {
   ${MINGW_PREFIX}/bin/python3 setup.py \
     install --prefix=${MINGW_PREFIX} --root="${pkgdir}"
 
+  # Fix up Python scripts and add convenience bash launchers for them.
+  # Meson people expect to call it as "meson" in POSIX-like bash environments.
   PREFIX_WIN=$(cygpath -m ${MINGW_PREFIX})
-  sed -s "s|${PREFIX_WIN}|${MINGW_PREFIX}|g" \
-    -i "${pkgdir}${MINGW_PREFIX}/bin/meson.py"
-  sed -s "s|${PREFIX_WIN}|${MINGW_PREFIX}|g" \
-    -i "${pkgdir}${MINGW_PREFIX}/bin/mesonconf.py"
-  sed -s "s|${PREFIX_WIN}|${MINGW_PREFIX}|g" \
-    -i "${pkgdir}${MINGW_PREFIX}/bin/mesonintrospect.py"
-  sed -s "s|${PREFIX_WIN}|${MINGW_PREFIX}|g" \
-    -i "${pkgdir}${MINGW_PREFIX}/bin/wraptool.py"
+  for p in "${pkgdir}${MINGW_PREFIX}"/bin/*.py; do
+    sed -s "s|${PREFIX_WIN}|${MINGW_PREFIX}|g" -i "$p"
+    d=$(dirname "$p")
+    b=$(basename "$p" .py)
+    if test -e "$d/$b"; then
+      echo >&2 "FIXME: $b is created upstream now, update package()"
+    else
+      cat >"$d/$b" <<"__END_STUB__"
+#!/usr/bin/env bash
+d=`dirname ${BASH_SOURCE[0]}`
+b=`basename ${BASH_SOURCE[0]}`
+exec "${d}/${b}.py" "$@"
+__END_STUB__
+    fi
+  done
 
   install -Dm644 "${srcdir}/${_realname}-${pkgver}/COPYING" "${pkgdir}${MINGW_PREFIX}/share/licenses/${_realname}/COPYING"
 }
